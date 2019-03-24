@@ -11,6 +11,7 @@ class X11ClientFrame;
 class X11Background;
 class X11Compositor;
 class X11DebugCompositor;
+class TexturePixmap;
 }
 
 namespace WManager{
@@ -161,6 +162,7 @@ friend class Compositor::X11ClientFrame;
 friend class Compositor::X11Background;
 friend class Compositor::X11Compositor;
 friend class Compositor::X11DebugCompositor;
+friend class Compositor::TexturePixmap;
 public:
 	X11Backend();
 	virtual ~X11Backend();

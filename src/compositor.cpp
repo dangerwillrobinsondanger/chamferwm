@@ -10,6 +10,10 @@
 #include <limits>
 #include <sys/shm.h>
 
+#include <gbm.h> //temp
+#include <fcntl.h>
+#include <unistd.h>
+
 namespace Compositor{
 
 ClientFrame::ClientFrame(uint w, uint h, const char *pshaderName[Pipeline::SHADER_MODULE_COUNT], CompositorInterface *_pcomp) : pcomp(_pcomp), passignedSet(0), time(0.0f), shaderUserFlags(0), fullRegionUpdate(true){
@@ -187,7 +191,7 @@ void CompositorInterface::InitializeRenderEngine(){
 	VkLayerProperties *playerProps = new VkLayerProperties[layerCount];
 	vkEnumerateInstanceLayerProperties(&layerCount,playerProps);
 
-	/*const char *players[] = {"VK_LAYER_LUNARG_standard_validation"}; //TODO: add choice
+	const char *players[] = {"VK_LAYER_LUNARG_standard_validation"}; //TODO: add choice
 	DebugPrintf(stdout,"Enumerating required layers\n");
 	uint layersFound = 0;
 	for(uint i = 0; i < layerCount; ++i)
@@ -197,7 +201,7 @@ void CompositorInterface::InitializeRenderEngine(){
 				++layersFound;
 			}
 	if(layersFound < sizeof(players)/sizeof(players[0]))
-		throw Exception("Could not find all required layers.");*/
+		throw Exception("Could not find all required layers.");
 
 	uint extCount;
 	vkEnumerateInstanceExtensionProperties(0,&extCount,0);
@@ -208,8 +212,8 @@ void CompositorInterface::InitializeRenderEngine(){
 		VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
 		"VK_KHR_surface",
 		"VK_KHR_xcb_surface",
-		//"VK_KHR_get_physical_device_properties2",
-		//VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME
+		"VK_KHR_get_physical_device_properties2",
+		"VK_KHR_external_memory_capabilities"
 	};
 	DebugPrintf(stdout,"Enumerating required extensions\n");
 	uint extFound = 0;
@@ -233,8 +237,8 @@ void CompositorInterface::InitializeRenderEngine(){
 	VkInstanceCreateInfo instanceCreateInfo = {};
 	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	instanceCreateInfo.pApplicationInfo = &appInfo;
-	instanceCreateInfo.enabledLayerCount = 0;//sizeof(players)/sizeof(players[0]); //also in vkCreateDevice
-	instanceCreateInfo.ppEnabledLayerNames = 0;//players;
+	instanceCreateInfo.enabledLayerCount = sizeof(players)/sizeof(players[0]); //also in vkCreateDevice
+	instanceCreateInfo.ppEnabledLayerNames = players;
 	instanceCreateInfo.enabledExtensionCount = sizeof(pextensions)/sizeof(pextensions[0]);
 	instanceCreateInfo.ppEnabledExtensionNames = pextensions;
 	if(vkCreateInstance(&instanceCreateInfo,0,&instance) != VK_SUCCESS)
@@ -359,7 +363,12 @@ void CompositorInterface::InitializeRenderEngine(){
 	vkEnumerateDeviceExtensionProperties(physicalDev,0,&devExtCount,pdevExtProps);
 
 	//device extensions
-	const char *pdevExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+	const char *pdevExtensions[] = {
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+		VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
+		VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
+		"VK_EXT_external_memory_dma_buf"
+	};
 	DebugPrintf(stdout,"Enumerating required device extensions\n");
 	uint devExtFound = 0;
 	for(uint i = 0; i < devExtCount; ++i)
@@ -379,8 +388,8 @@ void CompositorInterface::InitializeRenderEngine(){
 	devCreateInfo.pEnabledFeatures = &physicalDevFeatures;
 	devCreateInfo.ppEnabledExtensionNames = pdevExtensions;
 	devCreateInfo.enabledExtensionCount = sizeof(pdevExtensions)/sizeof(pdevExtensions[0]);
-	devCreateInfo.ppEnabledLayerNames = 0;//players;
-	devCreateInfo.enabledLayerCount = 0;//sizeof(players)/sizeof(players[0]);
+	devCreateInfo.ppEnabledLayerNames = players;
+	devCreateInfo.enabledLayerCount = sizeof(players)/sizeof(players[0]);
 	if(vkCreateDevice(physicalDev,&devCreateInfo,0,&logicalDev) != VK_SUCCESS)
 		throw Exception("Failed to create a logical device.");
 	
@@ -948,7 +957,7 @@ Texture * CompositorInterface::CreateTexture(uint w, uint h){
 		textureCache.pop_back();
 		printf("----------- found cached texture\n");
 
-	}else ptexture = new Texture(w,h,VK_FORMAT_R8G8B8A8_UNORM,this);
+	}else ptexture = new Texture(w,h,this);
 
 	return ptexture;
 }
@@ -1039,9 +1048,13 @@ X11ClientFrame::X11ClientFrame(WManager::Container *pcontainer, const Backend::X
 
 	damage = xcb_generate_id(pbackend->pcon);
 	xcb_damage_create(pbackend->pcon,damage,window,XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES);
+
+	ptexture->Attach(windowPixmap);
 }
 
 X11ClientFrame::~X11ClientFrame(){
+	ptexture->Detach();
+
 	xcb_damage_destroy(pbackend->pcon,damage);
 	//
 	xcb_composite_unredirect_window(pbackend->pcon,window,XCB_COMPOSITE_REDIRECT_MANUAL);
@@ -1119,10 +1132,14 @@ void X11ClientFrame::UpdateContents(const VkCommandBuffer *pcommandBuffer){
 }
 
 void X11ClientFrame::AdjustSurface1(){
+	ptexture->Detach();
+
 	xcb_free_pixmap(pbackend->pcon,windowPixmap);
 	xcb_composite_name_window_pixmap(pbackend->pcon,window,windowPixmap);
 
 	AdjustSurface(rect.w,rect.h);
+
+	ptexture->Attach(windowPixmap);
 }
 
 X11Background::X11Background(xcb_pixmap_t _pixmap, uint _w, uint _h, const char *_pshaderName[Pipeline::SHADER_MODULE_COUNT], X11Compositor *_pcomp) : w(_w), h(_h), ClientFrame(_w,_h,_pshaderName,_pcomp), pcomp11(_pcomp), pixmap(_pixmap){
@@ -1259,12 +1276,29 @@ void X11Compositor::Start(){
 	DebugPrintf(stdout,"SHM %u.%u\n",pshmReply->major_version,pshmReply->minor_version);
 	free(pshmReply);
 
+	xcb_dri3_query_version_cookie_t dri3Cookie = xcb_dri3_query_version(pbackend->pcon,XCB_DRI3_MAJOR_VERSION,XCB_DRI3_MINOR_VERSION);
+	xcb_dri3_query_version_reply_t *pdri3Reply = xcb_dri3_query_version_reply(pbackend->pcon,dri3Cookie,0);
+	if(!pdri3Reply)
+		throw Exception("DRI3 extension unavailable.\n");
+	DebugPrintf(stdout,"DRI3 %u.%u\n",pdri3Reply->major_version,pdri3Reply->minor_version);
+	free(pdri3Reply);
+
 	xcb_flush(pbackend->pcon);
 
 	InitializeRenderEngine();
+
+	cardfd = open("/dev/dri/card1",O_RDWR|FD_CLOEXEC);
+	if(cardfd < 0)
+		throw Exception("Failed to open /dev/dri/card*\n");
+	pgbmdev = gbm_create_device(cardfd);
+	if(!pgbmdev)
+		throw Exception("Failed to create GBM device.\n");
 }
 
 void X11Compositor::Stop(){
+	gbm_device_destroy(pgbmdev);
+	close(cardfd);
+
 	if(pbackground)
 		delete pbackground;
 	DestroyRenderEngine();
