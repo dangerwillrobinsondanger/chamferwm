@@ -1074,6 +1074,7 @@ void X11ClientFrame::UpdateContents(const VkCommandBuffer *pcommandBuffer){
 		damageRegions.push_back(rect1);
 	}
 
+#if 0
 	unsigned char *pdata = (unsigned char *)ptexture->Map();
 
 	/*struct timespec t1;
@@ -1119,6 +1120,8 @@ void X11ClientFrame::UpdateContents(const VkCommandBuffer *pcommandBuffer){
 	}
 
 	ptexture->Unmap(pcommandBuffer,damageRegions.data(),damageRegions.size());
+#endif
+	ptexture->Update(pcommandBuffer,damageRegions.data(),damageRegions.size());
 
 	/*struct timespec t3;
 	clock_gettime(CLOCK_MONOTONIC,&t3);
@@ -1287,9 +1290,14 @@ void X11Compositor::Start(){
 
 	InitializeRenderEngine();
 
-	cardfd = open("/dev/dri/card1",O_RDWR|FD_CLOEXEC);
-	if(cardfd < 0)
-		throw Exception("Failed to open /dev/dri/card1");
+	char cardStr[256];
+	snprintf(cardStr,sizeof(cardStr),"/dev/dri/card%u",physicalDevIndex);
+
+	cardfd = open(cardStr,O_RDWR|FD_CLOEXEC);
+	if(cardfd < 0){
+		snprintf(Exception::buffer,sizeof(Exception::buffer),"Failed to open %s",cardStr);
+		throw Exception();
+	}
 	pgbmdev = gbm_create_device(cardfd);
 	if(!pgbmdev)
 		throw Exception("Failed to create GBM device.");
