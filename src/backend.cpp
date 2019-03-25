@@ -470,7 +470,7 @@ void Default::Start(){
 	sint scount;
 	pcon = xcb_connect(0,&scount);
 	if(xcb_connection_has_error(pcon))
-		throw Exception("Failed to connect to X server.\n");
+		throw Exception("Failed to connect to X server.");
 
 	const xcb_setup_t *psetup = xcb_get_setup(pcon);
 	xcb_screen_iterator_t sm = xcb_setup_roots_iterator(psetup);
@@ -479,7 +479,7 @@ void Default::Start(){
 
 	pscr = sm.data;
 	if(!pscr)
-		throw Exception("Screen unavailable.\n");
+		throw Exception("Screen unavailable.");
 
 	DebugPrintf(stdout,"Screen size: %ux%u\n",pscr->width_in_pixels,pscr->height_in_pixels);
 	//https://standards.freedesktop.org/wm-spec/wm-spec-1.3.html#idm140130317705584
@@ -511,13 +511,13 @@ void Default::Start(){
 	DebugPrintf(stdout,"Root id: %x\n",window);
 
 	if(perr != 0){
-		snprintf(Exception::buffer,sizeof(Exception::buffer),"Substructure redirection failed (%d). WM already present.\n",perr->error_code);
+		snprintf(Exception::buffer,sizeof(Exception::buffer),"Substructure redirection failed (%d). WM already present.",perr->error_code);
 		throw Exception();
 	}
 
 	xcb_intern_atom_cookie_t *patomCookie = xcb_ewmh_init_atoms(pcon,&ewmh);
 	if(!xcb_ewmh_init_atoms_replies(&ewmh,patomCookie,0))
-		throw Exception("Failed to initialize EWMH atoms.\n");
+		throw Exception("Failed to initialize EWMH atoms.");
 	
 	for(uint i = 0; i < ATOM_COUNT; ++i)
 		atoms[i] = GetAtom(patomStrs[i]);
@@ -1388,7 +1388,7 @@ void Debug::Start(){
 	sint scount;
 	pcon = xcb_connect(0,&scount);
 	if(xcb_connection_has_error(pcon))
-		throw Exception("Failed to connect to X server.\n");
+		throw Exception("Failed to connect to X server.");
 
 	const xcb_setup_t *psetup = xcb_get_setup(pcon);
 	xcb_screen_iterator_t sm = xcb_setup_roots_iterator(psetup);
@@ -1397,7 +1397,7 @@ void Debug::Start(){
 
 	pscr = sm.data;
 	if(!pscr)
-		throw Exception("Screen unavailable.\n");
+		throw Exception("Screen unavailable.");
 
 	DebugPrintf(stdout,"Screen size: %ux%u\n",pscr->width_in_pixels,pscr->height_in_pixels);
 
