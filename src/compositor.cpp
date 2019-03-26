@@ -1053,7 +1053,7 @@ X11ClientFrame::X11ClientFrame(WManager::Container *pcontainer, const Backend::X
 }
 
 X11ClientFrame::~X11ClientFrame(){
-	ptexture->Detach();
+	//ptexture->Detach();
 
 	xcb_damage_destroy(pbackend->pcon,damage);
 	//
@@ -1135,7 +1135,7 @@ void X11ClientFrame::UpdateContents(const VkCommandBuffer *pcommandBuffer){
 }
 
 void X11ClientFrame::AdjustSurface1(){
-	ptexture->Detach();
+	//ptexture->Detach();
 
 	xcb_free_pixmap(pbackend->pcon,windowPixmap);
 	xcb_composite_name_window_pixmap(pbackend->pcon,window,windowPixmap);
